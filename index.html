@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Canopy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌲</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --accent:#e3b877;
+    --accent-soft:rgba(227,184,119,0.35);
+    --panel-bg:rgba(20,22,20,0.38);
+    --panel-border:rgba(255,255,255,0.14);
+    --text:#f5f1e8;
+    --text-dim:rgba(245,241,232,0.62);
+    --overlay-strength:0.35;
+    --blur-strength:0px;
+    --row-divider:rgba(255,255,255,0.10);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    color:var(--text);
+    min-height:100vh;
+    overflow-x:hidden;
+    position:relative;
+  }
+
+  /* ---------- Background layer ---------- */
+  #bg-layer{position:fixed; inset:0; z-index:-3; overflow:hidden; background:#0c1210;}
+  #bg-photo{
+    position:absolute; inset:-2%; width:104%; height:104%;
+    object-fit:cover; filter:blur(var(--blur-strength)) saturate(1.05);
+    transition:opacity .6s ease;
+  }
+  #bg-fallback{position:absolute; inset:0; opacity:0; transition:opacity .6s ease;}
+  #bg-overlay{position:fixed; inset:0; z-index:-2; background:rgba(6,10,8,var(--overlay-strength)); pointer-events:none;}
+  #bg-vignette{position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background:radial-gradient(ellipse at 50% 30%, transparent 40%, rgba(0,0,0,0.35) 100%);}
+
+  /* Night theme (CSS-generated) */
+  .night-sky{position:absolute; inset:0; background:
+      radial-gradient(1200px 700px at 75% -10%, rgba(150,170,220,0.10), transparent 60%),
+      linear-gradient(180deg,#050810 0%, #0a1120 35%, #0d1a1c 70%, #04100c 100%);}
+  .night-moon{position:absolute; top:8%; right:12%; width:90px; height:90px; border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, #fdf6e3, #e8dcb8 60%, #cbb98a 100%);
+    box-shadow:0 0 60px 18px rgba(250,240,200,0.25);}
+  .star{position:absolute; width:2px; height:2px; background:#fff; border-radius:50%; opacity:.7;
+    animation:twinkle 3.5s ease-in-out infinite;}
+  @keyframes twinkle{0%,100%{opacity:.15;} 50%{opacity:.9;}}
+  .tree-row{position:absolute; bottom:0; left:0; width:100%; height:32%;
+    background:linear-gradient(180deg, transparent 0%, rgba(3,10,7,0.9) 55%, #03100a 100%);}
+  .pine{position:absolute; bottom:0; width:0; height:0;
+    border-left:60px solid transparent; border-right:60px solid transparent; border-bottom:150px solid #041a11;
+    filter:blur(.3px);}
+  .firefly{position:absolute; width:5px; height:5px; border-radius:50%;
+    background:#d8f79a; box-shadow:0 0 8px 3px rgba(216,247,154,0.8);
+    animation:drift 9s ease-in-out infinite;}
+  @keyframes drift{
+    0%{transform:translate(0,0); opacity:0;}
+    15%{opacity:1;}
+    50%{transform:translate(30px,-40px); opacity:.6;}
+    85%{opacity:1;}
+    100%{transform:translate(-20px,-80px); opacity:0;}
+  }
+
+  /* ---------- Layout ---------- */
+  .app{max-width:640px; margin:0 auto; padding:28px 18px 60px; position:relative; z-index:1;}
+  header.top{display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .mark{font-size:22px; opacity:.9;}
+  .brand h1{font-family:'Cormorant Garamond', serif; font-weight:500; font-size:28px; margin:0; letter-spacing:.5px;}
+  .icon-btn{
+    width:38px; height:38px; border-radius:50%; border:1px solid var(--panel-border);
+    background:rgba(255,255,255,0.06); color:var(--text); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; backdrop-filter:blur(8px);
+  }
+  .icon-btn:active{transform:scale(0.94);}
+  .icon-btn svg{width:17px; height:17px;}
+
+  .day-nav{display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:22px;}
+  .day-nav .date-label{font-family:'Cormorant Garamond',serif; font-size:19px; font-weight:500; min-width:190px; text-align:center; letter-spacing:.3px;}
+  .day-nav .date-label .sub{display:block; font-family:'Inter',sans-serif; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-dim); margin-top:1px;}
+  .nav-btn{background:none; border:none; color:var(--text-dim); cursor:pointer; padding:6px; display:flex;}
+  .nav-btn:hover{color:var(--text);}
+  .nav-btn svg{width:16px; height:16px;}
+  .today-btn{font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--accent); background:none; border:1px solid var(--accent-soft); border-radius:20px; padding:4px 12px; cursor:pointer; margin-left:2px;}
+
+  /* ---------- Planner card ---------- */
+  .planner-card{
+    background:var(--panel-bg); border:1px solid var(--panel-border); border-radius:18px;
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    box-shadow:0 20px 60px rgba(0,0,0,0.35);
+    overflow:hidden;
+  }
+  .row{display:grid; grid-template-columns:78px 1fr; border-bottom:1px solid var(--row-divider);}
+  .row:last-child{border-bottom:none;}
+  .time-cell{
+    padding:16px 8px 16px 18px; font-family:'Cormorant Garamond',serif; font-size:17px; color:var(--text-dim);
+    border-right:1px solid var(--row-divider); display:flex; align-items:flex-start; justify-content:flex-start;
+    letter-spacing:.3px;
+  }
+  .row.has-tasks .time-cell{color:var(--text); font-weight:500;}
+  .task-cell{padding:10px 14px 10px 16px; min-height:56px;}
+  .task-list{display:flex; flex-direction:column;}
+  .task-item{
+    display:flex; align-items:center; gap:8px; padding:7px 4px; border-radius:8px;
+    transition:background .15s ease;
+  }
+  .task-item:hover, .task-item.editing{background:rgba(255,255,255,0.05);}
+  .task-text{
+    flex:1; font-size:15px; font-weight:400; cursor:text; padding:2px 2px; line-height:1.35;
+    word-break:break-word;
+  }
+  .task-text.empty{color:var(--text-dim); font-style:italic;}
+  .task-edit-input{
+    flex:1; background:transparent; border:none; border-bottom:1px solid var(--accent-soft);
+    color:var(--text); font-size:15px; font-family:inherit; padding:2px 2px; outline:none;
+  }
+  .task-actions{display:flex; align-items:center; gap:2px; opacity:.55;}
+  .task-item:hover .task-actions, .task-item.editing .task-actions{opacity:1;}
+  .mini-btn{width:26px; height:26px; border:none; background:none; color:var(--text-dim); cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:6px;}
+  .mini-btn:hover{color:var(--text); background:rgba(255,255,255,0.08);}
+  .mini-btn svg{width:14px; height:14px;}
+  .timer-badge{
+    font-size:11px; font-variant-numeric:tabular-nums; color:var(--accent); background:rgba(227,184,119,0.14);
+    border:1px solid var(--accent-soft); padding:2px 7px; border-radius:20px; display:flex; align-items:center; gap:4px;
+  }
+  .timer-badge.running::before{content:''; width:5px; height:5px; border-radius:50%; background:var(--accent); animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%,100%{opacity:.3;} 50%{opacity:1;}}
+
+  .add-task-btn{
+    display:flex; align-items:center; gap:6px; color:var(--text-dim); font-size:13px; background:none; border:none;
+    cursor:pointer; padding:6px 4px; margin-top:2px; opacity:.7;
+  }
+  .add-task-btn:hover{opacity:1; color:var(--accent);}
+  .add-task-btn svg{width:13px; height:13px;}
+
+  /* ---------- Settings panel ---------- */
+  .sheet-backdrop{position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:40; opacity:0; pointer-events:none; transition:opacity .25s;}
+  .sheet-backdrop.open{opacity:1; pointer-events:auto;}
+  .sheet{
+    position:fixed; left:0; right:0; bottom:0; z-index:41; max-width:640px; margin:0 auto;
+    background:#15181a; border-radius:22px 22px 0 0; padding:22px 22px 30px; color:var(--text);
+    transform:translateY(100%); transition:transform .3s cubic-bezier(.32,.72,0,1);
+    max-height:82vh; overflow-y:auto; box-shadow:0 -20px 60px rgba(0,0,0,0.5);
+  }
+  .sheet.open{transform:translateY(0);}
+  .sheet h2{font-family:'Cormorant Garamond',serif; font-weight:500; font-size:22px; margin:0 0 18px;}
+  .sheet .close-x{position:absolute; top:18px; right:18px; background:none; border:none; color:var(--text-dim); cursor:pointer;}
+  .theme-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:22px;}
+  .theme-card{
+    position:relative; height:78px; border-radius:12px; overflow:hidden; cursor:pointer;
+    border:2px solid transparent; background-size:cover; background-position:center;
+  }
+  .theme-card.active{border-color:var(--accent);}
+  .theme-card .label{position:absolute; bottom:6px; left:8px; font-size:12px; font-weight:500; text-shadow:0 1px 4px rgba(0,0,0,0.8);}
+  .theme-card .tick{position:absolute; top:6px; right:6px; width:18px; height:18px; border-radius:50%; background:var(--accent); display:none; align-items:center; justify-content:center;}
+  .theme-card.active .tick{display:flex;}
+  .theme-card .tick svg{width:11px; height:11px; color:#1a1a1a;}
+
+  .setting-row{margin-bottom:18px;}
+  .setting-row label{display:flex; justify-content:space-between; font-size:13px; color:var(--text-dim); margin-bottom:8px;}
+  input[type=range]{width:100%; accent-color:var(--accent);}
+  .btn-row{display:flex; gap:10px; margin-top:4px; flex-wrap:wrap;}
+  .pill-btn{
+    flex:1; min-width:130px; background:rgba(255,255,255,0.07); border:1px solid var(--panel-border); color:var(--text);
+    padding:10px 12px; border-radius:10px; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .pill-btn:hover{background:rgba(255,255,255,0.12);}
+  .pill-btn svg{width:14px; height:14px;}
+  input[type=file]{display:none;}
+
+  /* ---------- Timer modal ---------- */
+  .timer-modal-backdrop{position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:50; display:none; align-items:center; justify-content:center; padding:20px;}
+  .timer-modal-backdrop.open{display:flex;}
+  .timer-modal{
+    background:#181b1a; border-radius:20px; padding:30px 26px; width:100%; max-width:320px; text-align:center;
+    border:1px solid var(--panel-border); box-shadow:0 20px 60px rgba(0,0,0,0.5);
+  }
+  .timer-modal .task-name{font-size:13px; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:1px;}
+  .timer-display{font-family:'Cormorant Garamond',serif; font-size:56px; font-weight:500; margin:10px 0 6px; letter-spacing:1px; cursor:pointer;}
+  .timer-edit{display:none; justify-content:center; align-items:center; gap:6px; margin:14px 0;}
+  .timer-edit input{width:56px; text-align:center; font-size:22px; background:rgba(255,255,255,0.06); border:1px solid var(--panel-border); color:var(--text); border-radius:8px; padding:6px 0; font-family:inherit;}
+  .timer-edit span{opacity:.6;}
+  .timer-hint{font-size:11px; color:var(--text-dim); margin-bottom:18px;}
+  .timer-controls{display:flex; gap:10px; justify-content:center;}
+  .timer-controls button{
+    border:none; cursor:pointer; padding:11px 20px; border-radius:24px; font-size:13px; font-weight:500;
+    display:flex; align-items:center; gap:6px;
+  }
+  .btn-primary{background:var(--accent); color:#1a1408;}
+  .btn-ghost{background:rgba(255,255,255,0.08); color:var(--text);}
+  .timer-close{margin-top:18px; background:none; border:none; color:var(--text-dim); font-size:12px; cursor:pointer;}
+
+  ::-webkit-scrollbar{width:6px;}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15); border-radius:3px;}
+</style>
+</head>
+<body>
+
+<div id="bg-layer">
+  <img id="bg-photo" src="" alt="">
+  <div id="bg-fallback"></div>
+  <div id="night-scene" class="night-sky" style="display:none;"></div>
+</div>
+<div id="bg-overlay"></div>
+<div id="bg-vignette"></div>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <span class="mark">🌲</span>
+      <h1>Canopy</h1>
+    </div>
+    <button class="icon-btn" id="settingsBtn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    </button>
+  </header>
+
+  <div class="day-nav">
+    <button class="nav-btn" id="prevDay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <div class="date-label" id="dateLabel"></div>
+    <button class="nav-btn" id="nextDay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
+  </div>
+  <div style="text-align:center; margin-top:-14px; margin-bottom:20px;">
+    <button class="today-btn" id="todayBtn">Today</button>
+  </div>
+
+  <div class="planner-card" id="plannerCard"></div>
+
+  <div style="text-align:center; margin-top:16px; font-size:11px; color:var(--text-dim); letter-spacing:.5px;">
+    Tap a time to add a task &middot; tap a task to edit
+  </div>
+</div>
+
+<!-- Settings sheet -->
+<div class="sheet-backdrop" id="sheetBackdrop"></div>
+<div class="sheet" id="settingsSheet">
+  <button class="close-x" id="closeSheet">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <h2>Background</h2>
+  <div class="theme-grid" id="themeGrid"></div>
+
+  <div class="setting-row">
+    <label><span>Overlay darkness</span><span id="overlayVal"></span></label>
+    <input type="range" id="overlaySlider" min="0" max="80" value="35">
+  </div>
+  <div class="setting-row">
+    <label><span>Focus blur</span><span id="blurVal"></span></label>
+    <input type="range" id="blurSlider" min="0" max="10" value="0">
+  </div>
+
+  <div class="btn-row">
+    <button class="pill-btn" id="newPhotoBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg>
+      New photo
+    </button>
+    <button class="pill-btn" id="ownPhotoBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5.5-5.5L9 18"/></svg>
+      Use your own photo
+    </button>
+  </div>
+  <input type="file" id="filePicker" accept="image/*">
+</div>
+
+<!-- Timer modal -->
+<div class="timer-modal-backdrop" id="timerBackdrop">
+  <div class="timer-modal">
+    <div class="task-name" id="timerTaskName">Task</div>
+    <div class="timer-display" id="timerDisplay">25:00</div>
+    <div class="timer-edit" id="timerEdit">
+      <input type="number" id="timerMin" min="0" max="180" value="25"><span>:</span><input type="number" id="timerSec" min="0" max="59" value="0">
+    </div>
+    <div class="timer-hint">tap the time to set it</div>
+    <div class="timer-controls">
+      <button class="btn-primary" id="timerStartPause">Start</button>
+      <button class="btn-ghost" id="timerReset">Reset</button>
+    </div>
+    <button class="timer-close" id="timerCloseBtn">Close</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- Storage ---------------- */
+  const DATA_KEY = 'canopy_data_v2';
+  const SETTINGS_KEY = 'canopy_settings_v2';
+
+  function load(key, fallback){
+    try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+    catch(e){ return fallback; }
+  }
+  function save(key, val){
+    try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){}
+  }
+
+  let data = load(DATA_KEY, {});
+  let settings = load(SETTINGS_KEY, {
+    theme:'morning', overlay:35, blur:0,
+    customPhotos:{}, photoUrls:{}
+  });
+
+  /* ---------------- Themes ---------------- */
+  const THEME_KEYWORDS = {
+    morning: ['sunrise,ocean', 'sunrise,hills', 'sunrise,forest,sun'],
+    golden:  ['goldenhour,forest', 'goldenhour,field', 'goldenhour,mountains'],
+    misty:   ['misty,pineforest', 'fog,forest', 'mist,mountains,forest']
+  };
+  const THEME_LABEL = {morning:'Morning Canopy', golden:'Golden Hour', misty:'Misty Pine', night:'Deep Night'};
+  const THEME_SWATCH = {
+    morning:'linear-gradient(160deg,#ffcf7a,#ff9d5c 45%,#3b6b5a)',
+    golden:'linear-gradient(160deg,#ffdca3,#e08a3e 50%,#3a2a1c)',
+    misty:'linear-gradient(160deg,#c9d6cf,#7c9a8e 55%,#3a4a44)',
+    night:'linear-gradient(160deg,#1a2340,#0b1220 60%,#04100c)'
+  };
+
+  function flickrUrl(keywords, seed){
+    return `https://loremflickr.com/1600/1200/${encodeURIComponent(keywords)}/all?random=${seed}`;
+  }
+
+  function currentPhotoUrl(theme){
+    if(settings.customPhotos[theme]) return {custom:true, src:settings.customPhotos[theme]};
+    const list = THEME_KEYWORDS[theme];
+    const idx = (settings.photoUrls[theme+'_idx'] ?? 0) % list.length;
+    const seed = settings.photoUrls[theme+'_seed'] || 1;
+    return {custom:false, src: flickrUrl(list[idx], seed)};
+  }
+
+  function applyBackground(){
+    const theme = settings.theme;
+    document.documentElement.style.setProperty('--overlay-strength', (settings.overlay/100).toFixed(2));
+    document.documentElement.style.setProperty('--blur-strength', settings.blur + 'px');
+
+    const photoEl = document.getElementById('bg-photo');
+    const fallbackEl = document.getElementById('bg-fallback');
+    const nightEl = document.getElementById('night-scene');
+
+    if(theme === 'night'){
+      photoEl.style.opacity = 0;
+      fallbackEl.style.opacity = 0;
+      nightEl.style.display = 'block';
+      buildNightScene();
+      return;
+    }
+    nightEl.style.display = 'none';
+    fallbackEl.style.background = THEME_SWATCH[theme];
+
+    const {src} = currentPhotoUrl(theme);
+    photoEl.style.opacity = 0;
+    fallbackEl.style.opacity = 1;
+    const test = new Image();
+    test.onload = function(){
+      photoEl.src = src;
+      photoEl.style.opacity = 1;
+      fallbackEl.style.opacity = 0;
+    };
+    test.onerror = function(){
+      photoEl.style.opacity = 0;
+      fallbackEl.style.opacity = 1;
+    };
+    test.src = src;
+  }
+
+  let nightBuilt = false;
+  function buildNightScene(){
+    if(nightBuilt) return;
+    nightBuilt = true;
+    const el = document.getElementById('night-scene');
+    let html = '<div class="night-moon"></div>';
+    for(let i=0;i<50;i++){
+      const top = Math.random()*70;
+      const left = Math.random()*100;
+      const delay = (Math.random()*4).toFixed(2);
+      const size = Math.random() > .85 ? 3 : 2;
+      html += `<div class="star" style="top:${top}%; left:${left}%; width:${size}px; height:${size}px; animation-delay:${delay}s;"></div>`;
+    }
+    html += '<div class="tree-row">';
+    for(let i=0;i<9;i++){
+      const left = i*13 - 5 + (Math.random()*6-3);
+      const scale = 0.8 + Math.random()*0.5;
+      html += `<div class="pine" style="left:${left}%; transform:scale(${scale.toFixed(2)}); opacity:${0.85+Math.random()*0.15}"></div>`;
+    }
+    html += '</div>';
+    for(let i=0;i<10;i++){
+      const top = 40 + Math.random()*45;
+      const left = Math.random()*100;
+      const delay = (Math.random()*9).toFixed(2);
+      const dur = (7+Math.random()*5).toFixed(1);
+      html += `<div class="firefly" style="top:${top}%; left:${left}%; animation-delay:${delay}s; animation-duration:${dur}s;"></div>`;
+    }
+    el.innerHTML = html;
+  }
+
+  /* ---------------- Date helpers ---------------- */
+  function isoOf(d){ return d.toISOString().slice(0,10); }
+  let currentDate = new Date();
+  currentDate.setHours(0,0,0,0);
+
+  function renderDateLabel(){
+    const opts1 = {weekday:'long'};
+    const opts2 = {month:'long', day:'numeric', year:'numeric'};
+    const label = document.getElementById('dateLabel');
+    const todayIso = isoOf(new Date());
+    const isToday = isoOf(currentDate) === todayIso;
+    label.innerHTML = `${currentDate.toLocaleDateString(undefined,opts1)}
+      <span class="sub">${isToday ? 'Today · ' : ''}${currentDate.toLocaleDateString(undefined,opts2)}</span>`;
+  }
+
+  /* ---------------- Hours & tasks ---------------- */
+  const HOURS = [8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0]; // 0 = 12 AM (end of day)
+  function hourLabel(h){
+    if(h === 0) return '12 AM';
+    if(h === 12) return '12 PM';
+    return h < 12 ? `${h} AM` : `${h-12} PM`;
+  }
+
+  function dayData(){
+    const key = isoOf(currentDate);
+    if(!data[key]) data[key] = {};
+    return data[key];
+  }
+  function tasksFor(hour){
+    const d = dayData();
+    if(!d[hour]) d[hour] = [];
+    return d[hour];
+  }
+  function persistData(){ save(DATA_KEY, data); }
+
+  let uidCounter = 1;
+  function uid(){ return 'k' + (Date.now().toString(36)) + (uidCounter++); }
+
+  /* ---------------- Rendering the table ---------------- */
+  const card = document.getElementById('plannerCard');
+
+  function render(){
+    renderDateLabel();
+    card.innerHTML = '';
+    HOURS.forEach(hour=>{
+      const tasks = tasksFor(hour);
+      const row = document.createElement('div');
+      row.className = 'row' + (tasks.length ? ' has-tasks' : '');
+
+      const timeCell = document.createElement('div');
+      timeCell.className = 'time-cell';
+      timeCell.textContent = hourLabel(hour);
+      timeCell.addEventListener('click', ()=> addTask(hour));
+
+      const taskCell = document.createElement('div');
+      taskCell.className = 'task-cell';
+
+      const list = document.createElement('div');
+      list.className = 'task-list';
+      tasks.forEach(t => list.appendChild(buildTaskItem(hour, t)));
+      taskCell.appendChild(list);
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'add-task-btn';
+      addBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg> add task';
+      addBtn.addEventListener('click', ()=> addTask(hour));
+      taskCell.appendChild(addBtn);
+
+      row.appendChild(timeCell);
+      row.appendChild(taskCell);
+      card.appendChild(row);
+    });
+  }
+
+  function buildTaskItem(hour, task){
+    const item = document.createElement('div');
+    item.className = 'task-item';
+    item.dataset.id = task.id;
+
+    const text = document.createElement('div');
+    text.className = 'task-text';
+    text.textContent = task.text || '';
+    if(!task.text) { text.classList.add('empty'); text.textContent = 'Untitled task'; }
+    text.addEventListener('click', ()=> startEdit(item, hour, task));
+
+    const actions = document.createElement('div');
+    actions.className = 'task-actions';
+
+    if(task.remaining !== undefined && task.remaining !== null){
+      const badge = document.createElement('span');
+      badge.className = 'timer-badge' + (task.running ? ' running' : '');
+      badge.textContent = fmtTime(task.remaining);
+      badge.id = 'badge-' + task.id;
+      actions.appendChild(badge);
+    }
+
+    const timerBtn = document.createElement('button');
+    timerBtn.className = 'mini-btn';
+    timerBtn.title = 'Timer';
+    timerBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>';
+    timerBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openTimer(hour, task); });
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'mini-btn';
+    delBtn.title = 'Delete';
+    delBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6"/></svg>';
+    delBtn.addEventListener('click', (e)=>{ e.stopPropagation(); deleteTask(hour, task.id); });
+
+    actions.appendChild(timerBtn);
+    actions.appendChild(delBtn);
+
+    item.appendChild(text);
+    item.appendChild(actions);
+    return item;
+  }
+
+  function addTask(hour){
+    const tasks = tasksFor(hour);
+    const task = {id: uid(), text:'', duration:1500};
+    tasks.push(task);
+    persistData();
+    render();
+    requestAnimationFrame(()=>{
+      const item = card.querySelector(`.task-item[data-id="${task.id}"]`);
+      if(item) startEdit(item, hour, task, true);
+    });
+  }
+
+  function startEdit(item, hour, task, isNew){
+    if(item.classList.contains('editing')) return;
+    item.classList.add('editing');
+    const textEl = item.querySelector('.task-text');
+    const input = document.createElement('input');
+    input.className = 'task-edit-input';
+    input.value = task.text || '';
+    input.placeholder = 'Task name';
+    textEl.replaceWith(input);
+    input.focus();
+    if(isNew) input.select();
+
+    function commit(){
+      task.text = input.value.trim();
+      const tasks = tasksFor(hour);
+      if(!task.text){
+        const idx = tasks.findIndex(t=>t.id===task.id);
+        if(idx>-1) tasks.splice(idx,1);
+      }
+      persistData();
+      render();
+    }
+    input.addEventListener('keydown', e=>{
+      if(e.key === 'Enter'){ e.preventDefault(); input.blur(); }
+      if(e.key === 'Escape'){ input.value = task.text || ''; input.blur(); }
+    });
+    input.addEventListener('blur', commit);
+  }
+
+  function deleteTask(hour, id){
+    const tasks = tasksFor(hour);
+    const idx = tasks.findIndex(t=>t.id===id);
+    if(idx>-1) tasks.splice(idx,1);
+    if(activeTimers[id]){ clearInterval(activeTimers[id].interval); delete activeTimers[id]; }
+    persistData();
+    render();
+  }
+
+  /* ---------------- Day navigation ---------------- */
+  document.getElementById('prevDay').addEventListener('click', ()=>{
+    currentDate.setDate(currentDate.getDate()-1); render();
+  });
+  document.getElementById('nextDay').addEventListener('click', ()=>{
+    currentDate.setDate(currentDate.getDate()+1); render();
+  });
+  document.getElementById('todayBtn').addEventListener('click', ()=>{
+    currentDate = new Date(); currentDate.setHours(0,0,0,0); render();
+  });
+
+  /* ---------------- Timer ---------------- */
+  const activeTimers = {}; // id -> {interval, remaining, running}
+  let openTimerTask = null, openTimerHour = null;
+  const timerBackdrop = document.getElementById('timerBackdrop');
+  const timerDisplay = document.getElementById('timerDisplay');
+  const timerEdit = document.getElementById('timerEdit');
+  const timerMin = document.getElementById('timerMin');
+  const timerSec = document.getElementById('timerSec');
+  const timerStartPause = document.getElementById('timerStartPause');
+
+  function fmtTime(totalSec){
+    const m = Math.floor(totalSec/60);
+    const s = totalSec % 60;
+    return `${m}:${s.toString().padStart(2,'0')}`;
+  }
+
+  function openTimer(hour, task){
+    openTimerTask = task; openTimerHour = hour;
+    document.getElementById('timerTaskName').textContent = task.text || 'Untitled task';
+    const remaining = task.remaining ?? task.duration ?? 1500;
+    timerDisplay.textContent = fmtTime(remaining);
+    timerDisplay.dataset.remaining = remaining;
+    timerEdit.style.display = 'none';
+    timerDisplay.style.display = 'block';
+    updateStartPauseLabel();
+    timerBackdrop.classList.add('open');
+  }
+  function closeTimerModal(){
+    timerBackdrop.classList.remove('open');
+    openTimerTask = null; openTimerHour = null;
+  }
+  document.getElementById('timerCloseBtn').addEventListener('click', closeTimerModal);
+  timerBackdrop.addEventListener('click', e=>{ if(e.target === timerBackdrop) closeTimerModal(); });
+
+  function updateStartPauseLabel(){
+    if(!openTimerTask) return;
+    const running = activeTimers[openTimerTask.id]?.running;
+    timerStartPause.textContent = running ? 'Pause' : 'Start';
+  }
+
+  timerDisplay.addEventListener('click', ()=>{
+    if(!openTimerTask) return;
+    const running = activeTimers[openTimerTask.id]?.running;
+    if(running) return; // don't edit while running
+    const remaining = parseInt(timerDisplay.dataset.remaining || 0);
+    timerMin.value = Math.floor(remaining/60);
+    timerSec.value = remaining % 60;
+    timerDisplay.style.display = 'none';
+    timerEdit.style.display = 'flex';
+  });
+  [timerMin, timerSec].forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      let m = Math.max(0, parseInt(timerMin.value)||0);
+      let s = Math.max(0, Math.min(59, parseInt(timerSec.value)||0));
+      const total = m*60+s;
+      timerDisplay.dataset.remaining = total;
+      timerDisplay.textContent = fmtTime(total);
+      if(openTimerTask){
+        openTimerTask.remaining = total;
+        openTimerTask.duration = total;
+        persistData();
+      }
+      timerEdit.style.display = 'none';
+      timerDisplay.style.display = 'block';
+    });
+  });
+
+  timerStartPause.addEventListener('click', ()=>{
+    if(!openTimerTask) return;
+    const id = openTimerTask.id;
+    if(activeTimers[id]?.running){
+      pauseTimer(id);
+    } else {
+      startTimer(openTimerHour, openTimerTask);
+    }
+    updateStartPauseLabel();
+  });
+  document.getElementById('timerReset').addEventListener('click', ()=>{
+    if(!openTimerTask) return;
+    const id = openTimerTask.id;
+    if(activeTimers[id]) { clearInterval(activeTimers[id].interval); delete activeTimers[id]; }
+    openTimerTask.remaining = openTimerTask.duration;
+    persistData();
+    timerDisplay.dataset.remaining = openTimerTask.remaining;
+    timerDisplay.textContent = fmtTime(openTimerTask.remaining);
+    updateStartPauseLabel();
+    render();
+  });
+
+  function startTimer(hour, task){
+    if(activeTimers[task.id]?.running) return;
+    if(task.remaining === undefined || task.remaining === null) task.remaining = task.duration;
+    activeTimers[task.id] = activeTimers[task.id] || {};
+    activeTimers[task.id].running = true;
+    persistData();
+    activeTimers[task.id].interval = setInterval(()=>{
+      task.remaining--;
+      const badge = document.getElementById('badge-'+task.id);
+      if(badge) badge.textContent = fmtTime(Math.max(task.remaining,0));
+      if(openTimerTask && openTimerTask.id === task.id){
+        timerDisplay.dataset.remaining = task.remaining;
+        timerDisplay.textContent = fmtTime(Math.max(task.remaining,0));
+      }
+      if(task.remaining <= 0){
+        clearInterval(activeTimers[task.id].interval);
+        activeTimers[task.id].running = false;
+        task.remaining = 0;
+        chime();
+        persistData();
+        render();
+        if(openTimerTask && openTimerTask.id === task.id) updateStartPauseLabel();
+      }
+    }, 1000);
+    render();
+    if(openTimerTask) requestAnimationFrame(()=> {
+      const t = card.querySelector; // no-op, timer modal stays open independent of re-render
+    });
+  }
+  function pauseTimer(id){
+    if(activeTimers[id]){ clearInterval(activeTimers[id].interval); activeTimers[id].running = false; }
+    persistData();
+    render();
+  }
+
+  function chime(){
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const notes = [880, 1108, 1318];
+      notes.forEach((freq, i)=>{
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime + i*0.28);
+        gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + i*0.28 + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i*0.28 + 0.55);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(ctx.currentTime + i*0.28);
+        osc.stop(ctx.currentTime + i*0.28 + 0.6);
+      });
+    }catch(e){}
+  }
+
+  /* ---------------- Settings sheet ---------------- */
+  const sheet = document.getElementById('settingsSheet');
+  const sheetBackdrop = document.getElementById('sheetBackdrop');
+  function openSheet(){
+    buildThemeGrid();
+    document.getElementById('overlaySlider').value = settings.overlay;
+    document.getElementById('blurSlider').value = settings.blur;
+    updateSliderLabels();
+    sheet.classList.add('open'); sheetBackdrop.classList.add('open');
+  }
+  function closeSheet(){ sheet.classList.remove('open'); sheetBackdrop.classList.remove('open'); }
+  document.getElementById('settingsBtn').addEventListener('click', openSheet);
+  document.getElementById('closeSheet').addEventListener('click', closeSheet);
+  sheetBackdrop.addEventListener('click', closeSheet);
+
+  function buildThemeGrid(){
+    const grid = document.getElementById('themeGrid');
+    grid.innerHTML = '';
+    ['morning','golden','misty','night'].forEach(theme=>{
+      const card = document.createElement('div');
+      card.className = 'theme-card' + (settings.theme===theme ? ' active' : '');
+      const bg = settings.customPhotos[theme] ? `url(${settings.customPhotos[theme]})` : THEME_SWATCH[theme];
+      card.style.backgroundImage = settings.customPhotos[theme] ? bg : 'none';
+      card.style.background = settings.customPhotos[theme] ? undefined : THEME_SWATCH[theme];
+      if(settings.customPhotos[theme]){
+        card.style.backgroundImage = bg;
+        card.style.backgroundSize = 'cover';
+        card.style.backgroundPosition = 'center';
+      }
+      card.innerHTML += `<span class="label">${THEME_LABEL[theme]}</span><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></span>`;
+      card.addEventListener('click', ()=>{
+        settings.theme = theme;
+        save(SETTINGS_KEY, settings);
+        buildThemeGrid();
+        applyBackground();
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  function updateSliderLabels(){
+    document.getElementById('overlayVal').textContent = settings.overlay + '%';
+    document.getElementById('blurVal').textContent = settings.blur + 'px';
+  }
+  document.getElementById('overlaySlider').addEventListener('input', e=>{
+    settings.overlay = parseInt(e.target.value);
+    updateSliderLabels();
+    document.documentElement.style.setProperty('--overlay-strength', (settings.overlay/100).toFixed(2));
+  });
+  document.getElementById('overlaySlider').addEventListener('change', ()=> save(SETTINGS_KEY, settings));
+  document.getElementById('blurSlider').addEventListener('input', e=>{
+    settings.blur = parseInt(e.target.value);
+    updateSliderLabels();
+    document.documentElement.style.setProperty('--blur-strength', settings.blur+'px');
+  });
+  document.getElementById('blurSlider').addEventListener('change', ()=> save(SETTINGS_KEY, settings));
+
+  document.getElementById('newPhotoBtn').addEventListener('click', ()=>{
+    const theme = settings.theme;
+    if(theme === 'night') return;
+    delete settings.customPhotos[theme];
+    const list = THEME_KEYWORDS[theme];
+    const curIdx = settings.photoUrls[theme+'_idx'] ?? 0;
+    settings.photoUrls[theme+'_idx'] = (curIdx+1) % list.length;
+    settings.photoUrls[theme+'_seed'] = Date.now();
+    save(SETTINGS_KEY, settings);
+    buildThemeGrid();
+    applyBackground();
+  });
+
+  document.getElementById('ownPhotoBtn').addEventListener('click', ()=>{
+    document.getElementById('filePicker').click();
+  });
+  document.getElementById('filePicker').addEventListener('change', function(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt){
+      const img = new Image();
+      img.onload = function(){
+        const canvas = document.createElement('canvas');
+        const maxW = 1600;
+        const scale = Math.min(1, maxW/img.width);
+        canvas.width = img.width*scale;
+        canvas.height = img.height*scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        settings.customPhotos[settings.theme] = dataUrl;
+        save(SETTINGS_KEY, settings);
+        buildThemeGrid();
+        applyBackground();
+      };
+      img.src = evt.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  });
+
+  /* ---------------- Init ---------------- */
+  render();
+  applyBackground();
+
+})();
+</script>
+</body>
+</html>
