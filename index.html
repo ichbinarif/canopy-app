@@ -89,6 +89,7 @@
   }
   .icon-btn:active{transform:scale(0.94);}
   .icon-btn svg{width:17px; height:17px;}
+  .icon-btn.active{color:var(--accent); border-color:var(--accent-soft); background:rgba(227,184,119,0.16);}
 
   .day-nav{display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:22px;}
   .day-nav .date-label{font-family:'Cormorant Garamond',serif; font-size:19px; font-weight:500; min-width:190px; text-align:center; letter-spacing:.3px;}
@@ -226,6 +227,9 @@
       <h1>Canopy</h1>
     </div>
     <div style="display:flex; gap:8px;">
+      <button class="icon-btn" id="musicBtn" aria-label="Music">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </button>
       <button class="icon-btn" id="fullscreenBtn" aria-label="Fullscreen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg>
       </button>
@@ -280,6 +284,18 @@
     </button>
   </div>
   <input type="file" id="filePicker" accept="image/*">
+
+  <h2 style="margin-top:30px;">Focus Music</h2>
+  <div class="setting-row">
+    <label><span id="musicMoodLabel">Cheerful morning</span><span id="musicVolVal">50%</span></label>
+    <input type="range" id="musicVolumeSlider" min="0" max="100" value="50">
+  </div>
+  <div class="btn-row">
+    <button class="pill-btn" id="musicToggleBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <span id="musicToggleLabel">Play music</span>
+    </button>
+  </div>
 </div>
 
 <!-- Timer modal -->
@@ -318,8 +334,10 @@
   let data = load(DATA_KEY, {});
   let settings = load(SETTINGS_KEY, {
     theme:'morning', overlay:35, blur:0,
-    customPhotos:{}, photoUrls:{}
+    customPhotos:{}, photoUrls:{},
+    music:{on:false, volume:0.5}
   });
+  if(!settings.music) settings.music = {on:false, volume:0.5};
 
   /* ---------------- Themes ---------------- */
   const THEME_KEYWORDS = {
@@ -732,6 +750,167 @@
     }catch(e){}
   }
 
+  /* ---------------- Focus Music (generative, no audio files needed) ---------------- */
+  const MUSIC_MOODS = {
+    morning: { label:'Cheerful morning', root:261.63, scale:[0,2,4,7,9], third:4, chordEvery:7,  pluckMin:1.4, pluckMax:2.4, pluckChance:0.9,  filterFreq:2200, gain:0.55, wave:'triangle', pluckWave:'sine' },
+    golden:  { label:'Warm afternoon',   root:220.00, scale:[0,2,4,7,9], third:4, chordEvery:8,  pluckMin:2.2, pluckMax:3.4, pluckChance:0.75, filterFreq:1400, gain:0.5,  wave:'triangle', pluckWave:'triangle' },
+    misty:   { label:'Slow evening',     root:174.61, scale:[0,3,5,7,10],third:3, chordEvery:11, pluckMin:4.5, pluckMax:7,   pluckChance:0.5,  filterFreq:850,  gain:0.42, wave:'sine',     pluckWave:'sine' },
+    night:   { label:'Soft night hush',  root:146.83, scale:[0,3,5,7,10],third:3, chordEvery:15, pluckMin:8,   pluckMax:13,  pluckChance:0.3,  filterFreq:480,  gain:0.34, wave:'sine',     pluckWave:'sine' }
+  };
+
+  const Music = (function(){
+    let ctx = null, master = null, moodGain = null, filter = null;
+    let currentKey = null, playing = false, volume = 0.5, timers = [];
+
+    function noteFreq(root, semis){ return root * Math.pow(2, semis/12); }
+    function clearTimers(){ timers.forEach(t=>clearTimeout(t)); timers = []; }
+
+    function ensureCtx(){
+      if(!ctx){
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        master = ctx.createGain();
+        master.gain.value = volume;
+        master.connect(ctx.destination);
+      }
+      if(ctx.state === 'suspended') ctx.resume();
+    }
+
+    function buildMoodChain(){
+      filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      moodGain = ctx.createGain();
+      moodGain.gain.value = 0;
+      filter.connect(moodGain).connect(master);
+    }
+
+    function schedulePad(mood){
+      if(!playing || currentKey !== mood.key) return;
+      const now = ctx.currentTime;
+      filter.frequency.setTargetAtTime(mood.filterFreq, now, 2);
+      const degrees = [0, mood.third, 7];
+      if(Math.random() < 0.35) degrees.push(mood.scale[mood.scale.length-1]);
+      const attack = 3.5, hold = mood.chordEvery, release = 4;
+      degrees.forEach((deg, i)=>{
+        [0,-12].forEach(oct=>{
+          const osc = ctx.createOscillator();
+          osc.type = mood.wave;
+          osc.frequency.value = noteFreq(mood.root, deg + oct);
+          const g = ctx.createGain();
+          const peak = (oct === -12 ? 0.32 : 0.5) / (i+1.6);
+          g.gain.setValueAtTime(0.0001, now);
+          g.gain.linearRampToValueAtTime(peak, now + attack);
+          g.gain.setValueAtTime(peak, now + attack + hold);
+          g.gain.linearRampToValueAtTime(0.0001, now + attack + hold + release);
+          osc.connect(g).connect(filter);
+          osc.start(now);
+          osc.stop(now + attack + hold + release + 0.5);
+        });
+      });
+      const t = setTimeout(()=> schedulePad(mood), hold * 1000);
+      timers.push(t);
+    }
+
+    function schedulePluck(mood){
+      if(!playing || currentKey !== mood.key) return;
+      if(Math.random() < mood.pluckChance){
+        const now = ctx.currentTime;
+        const deg = mood.scale[Math.floor(Math.random()*mood.scale.length)];
+        const osc = ctx.createOscillator();
+        osc.type = mood.pluckWave;
+        osc.frequency.value = noteFreq(mood.root, deg + 12);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.linearRampToValueAtTime(0.16, now + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+        osc.connect(g).connect(filter);
+        osc.start(now);
+        osc.stop(now + 2);
+      }
+      const wait = (mood.pluckMin + Math.random()*(mood.pluckMax-mood.pluckMin)) * 1000;
+      const t = setTimeout(()=> schedulePluck(mood), wait);
+      timers.push(t);
+    }
+
+    function startMood(key){
+      currentKey = key;
+      const mood = Object.assign({key}, MUSIC_MOODS[key]);
+      buildMoodChain();
+      moodGain.gain.setValueAtTime(0, ctx.currentTime);
+      moodGain.gain.linearRampToValueAtTime(mood.gain, ctx.currentTime + 2.5);
+      schedulePad(mood);
+      setTimeout(()=> schedulePluck(mood), 1500);
+    }
+
+    return {
+      start(key){
+        ensureCtx();
+        if(playing) return;
+        playing = true;
+        startMood(key);
+      },
+      stop(){
+        if(!playing) return;
+        playing = false;
+        clearTimers();
+        if(moodGain && ctx){
+          const now = ctx.currentTime;
+          moodGain.gain.cancelScheduledValues(now);
+          moodGain.gain.setValueAtTime(moodGain.gain.value, now);
+          moodGain.gain.linearRampToValueAtTime(0.0001, now + 1.2);
+        }
+      },
+      switchMood(key){
+        if(!playing){ return; }
+        clearTimers();
+        const oldGain = moodGain, oldFilter = filter;
+        if(oldGain && ctx){
+          const now = ctx.currentTime;
+          oldGain.gain.cancelScheduledValues(now);
+          oldGain.gain.setValueAtTime(oldGain.gain.value, now);
+          oldGain.gain.linearRampToValueAtTime(0.0001, now + 2);
+          setTimeout(()=>{ try{ oldGain.disconnect(); oldFilter.disconnect(); }catch(e){} }, 2200);
+        }
+        startMood(key);
+      },
+      setVolume(v){
+        volume = v;
+        if(master && ctx) master.gain.linearRampToValueAtTime(v, ctx.currentTime + 0.15);
+      },
+      isPlaying(){ return playing; }
+    };
+  })();
+  Music.setVolume(settings.music.volume);
+
+  function updateMusicUI(){
+    const on = Music.isPlaying();
+    const btn = document.getElementById('musicBtn');
+    if(btn) btn.classList.toggle('active', on);
+    const toggleLabel = document.getElementById('musicToggleLabel');
+    if(toggleLabel) toggleLabel.textContent = on ? 'Pause music' : 'Play music';
+    const moodLabel = document.getElementById('musicMoodLabel');
+    if(moodLabel) moodLabel.textContent = MUSIC_MOODS[settings.theme].label;
+    const volVal = document.getElementById('musicVolVal');
+    if(volVal) volVal.textContent = Math.round(settings.music.volume*100) + '%';
+    const slider = document.getElementById('musicVolumeSlider');
+    if(slider) slider.value = Math.round(settings.music.volume*100);
+  }
+
+  function setMusicOn(on){
+    settings.music.on = on;
+    save(SETTINGS_KEY, settings);
+    if(on) Music.start(settings.theme); else Music.stop();
+    updateMusicUI();
+  }
+  document.getElementById('musicBtn').addEventListener('click', ()=> setMusicOn(!settings.music.on));
+  document.getElementById('musicToggleBtn').addEventListener('click', ()=> setMusicOn(!settings.music.on));
+  document.getElementById('musicVolumeSlider').addEventListener('input', e=>{
+    const v = parseInt(e.target.value)/100;
+    settings.music.volume = v;
+    Music.setVolume(v);
+    updateMusicUI();
+  });
+  document.getElementById('musicVolumeSlider').addEventListener('change', ()=> save(SETTINGS_KEY, settings));
+
   /* ---------------- Settings sheet ---------------- */
   const sheet = document.getElementById('settingsSheet');
   const sheetBackdrop = document.getElementById('sheetBackdrop');
@@ -740,6 +919,7 @@
     document.getElementById('overlaySlider').value = settings.overlay;
     document.getElementById('blurSlider').value = settings.blur;
     updateSliderLabels();
+    updateMusicUI();
     sheet.classList.add('open'); sheetBackdrop.classList.add('open');
   }
   function closeSheet(){ sheet.classList.remove('open'); sheetBackdrop.classList.remove('open'); }
@@ -767,6 +947,8 @@
         save(SETTINGS_KEY, settings);
         buildThemeGrid();
         applyBackground();
+        Music.switchMood(theme);
+        updateMusicUI();
       });
       grid.appendChild(card);
     });
@@ -864,6 +1046,10 @@
   // doesn't fully hide the system status bar on its own).
   function autoFullscreenOnce(){
     enterFullscreen();
+    if(settings.music.on && !Music.isPlaying()){
+      Music.start(settings.theme);
+      updateMusicUI();
+    }
     document.removeEventListener('touchend', autoFullscreenOnce);
     document.removeEventListener('click', autoFullscreenOnce);
   }
@@ -874,6 +1060,7 @@
   render();
   applyBackground();
   updateFullscreenIcon();
+  updateMusicUI();
 
 })();
 </script>
