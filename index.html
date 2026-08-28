@@ -315,6 +315,15 @@
   </div>
 </div>
 
+<!-- Hidden YouTube audio players (one per mood) -->
+<div style="position:fixed; width:1px; height:1px; overflow:hidden; opacity:0; pointer-events:none; left:-9999px; top:-9999px;">
+  <div id="yt-morning"></div>
+  <div id="yt-golden"></div>
+  <div id="yt-misty"></div>
+  <div id="yt-night"></div>
+</div>
+<script src="https://www.youtube.com/iframe_api"></script>
+
 <script>
 (function(){
   "use strict";
@@ -750,131 +759,86 @@
     }catch(e){}
   }
 
-  /* ---------------- Focus Music (generative, no audio files needed) ---------------- */
-  const MUSIC_MOODS = {
-    morning: { label:'Cheerful morning', root:261.63, scale:[0,2,4,7,9], third:4, chordEvery:7,  pluckMin:1.4, pluckMax:2.4, pluckChance:0.9,  filterFreq:2200, gain:0.55, wave:'triangle', pluckWave:'sine' },
-    golden:  { label:'Warm afternoon',   root:220.00, scale:[0,2,4,7,9], third:4, chordEvery:8,  pluckMin:2.2, pluckMax:3.4, pluckChance:0.75, filterFreq:1400, gain:0.5,  wave:'triangle', pluckWave:'triangle' },
-    misty:   { label:'Slow evening',     root:174.61, scale:[0,3,5,7,10],third:3, chordEvery:11, pluckMin:4.5, pluckMax:7,   pluckChance:0.5,  filterFreq:850,  gain:0.42, wave:'sine',     pluckWave:'sine' },
-    night:   { label:'Soft night hush',  root:146.83, scale:[0,3,5,7,10],third:3, chordEvery:15, pluckMin:8,   pluckMax:13,  pluckChance:0.3,  filterFreq:480,  gain:0.34, wave:'sine',     pluckWave:'sine' }
+  /* ---------------- Focus Music (your chosen YouTube tracks) ---------------- */
+  const MUSIC_TRACKS = {
+    morning: { id:'_4kHxtiuML0', label:'Focus Music for Work & Studying', elId:'yt-morning' },
+    golden:  { id:'ah-WxH2upEw', label:'Focus Music for Deep Work',       elId:'yt-golden' },
+    misty:   { id:'xd0XIMd2Kco', label:'Quiet Morning Piano — Study Focus', elId:'yt-misty' },
+    night:   { id:'k5rEQ2wFPUw', label:'Night Studies (Dark Academia)',  elId:'yt-night' }
   };
 
   const Music = (function(){
-    let ctx = null, master = null, moodGain = null, filter = null;
-    let currentKey = null, playing = false, volume = 0.5, timers = [];
+    let players = {};       // key -> YT.Player
+    let ready = {};         // key -> bool
+    let apiReady = false;
+    let currentKey = null;
+    let playing = false;
+    let volumePct = 50;     // 0-100
+    let pendingKey = null;
 
-    function noteFreq(root, semis){ return root * Math.pow(2, semis/12); }
-    function clearTimers(){ timers.forEach(t=>clearTimeout(t)); timers = []; }
+    window.onYouTubeIframeAPIReady = function(){
+      apiReady = true;
+      if(pendingKey){ const k = pendingKey; pendingKey = null; playMood(k); }
+    };
 
-    function ensureCtx(){
-      if(!ctx){
-        ctx = new (window.AudioContext || window.webkitAudioContext)();
-        master = ctx.createGain();
-        master.gain.value = volume;
-        master.connect(ctx.destination);
-      }
-      if(ctx.state === 'suspended') ctx.resume();
-    }
-
-    function buildMoodChain(){
-      filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      moodGain = ctx.createGain();
-      moodGain.gain.value = 0;
-      filter.connect(moodGain).connect(master);
-    }
-
-    function schedulePad(mood){
-      if(!playing || currentKey !== mood.key) return;
-      const now = ctx.currentTime;
-      filter.frequency.setTargetAtTime(mood.filterFreq, now, 2);
-      const degrees = [0, mood.third, 7];
-      if(Math.random() < 0.35) degrees.push(mood.scale[mood.scale.length-1]);
-      const attack = 3.5, hold = mood.chordEvery, release = 4;
-      degrees.forEach((deg, i)=>{
-        [0,-12].forEach(oct=>{
-          const osc = ctx.createOscillator();
-          osc.type = mood.wave;
-          osc.frequency.value = noteFreq(mood.root, deg + oct);
-          const g = ctx.createGain();
-          const peak = (oct === -12 ? 0.32 : 0.5) / (i+1.6);
-          g.gain.setValueAtTime(0.0001, now);
-          g.gain.linearRampToValueAtTime(peak, now + attack);
-          g.gain.setValueAtTime(peak, now + attack + hold);
-          g.gain.linearRampToValueAtTime(0.0001, now + attack + hold + release);
-          osc.connect(g).connect(filter);
-          osc.start(now);
-          osc.stop(now + attack + hold + release + 0.5);
-        });
+    function createPlayer(key){
+      const track = MUSIC_TRACKS[key];
+      players[key] = new YT.Player(track.elId, {
+        videoId: track.id,
+        playerVars:{
+          autoplay:0, controls:0, disablekb:1, fs:0, modestbranding:1,
+          rel:0, playsinline:1, loop:1, playlist:track.id
+        },
+        events:{
+          onReady:(e)=>{
+            ready[key] = true;
+            try{ e.target.setVolume(volumePct); }catch(err){}
+            if(currentKey === key && playing) e.target.playVideo();
+          },
+          onStateChange:(e)=>{
+            if(e.data === YT.PlayerState.ENDED){
+              try{ e.target.seekTo(0); e.target.playVideo(); }catch(err){}
+            }
+          }
+        }
       });
-      const t = setTimeout(()=> schedulePad(mood), hold * 1000);
-      timers.push(t);
     }
 
-    function schedulePluck(mood){
-      if(!playing || currentKey !== mood.key) return;
-      if(Math.random() < mood.pluckChance){
-        const now = ctx.currentTime;
-        const deg = mood.scale[Math.floor(Math.random()*mood.scale.length)];
-        const osc = ctx.createOscillator();
-        osc.type = mood.pluckWave;
-        osc.frequency.value = noteFreq(mood.root, deg + 12);
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(0.0001, now);
-        g.gain.linearRampToValueAtTime(0.16, now + 0.03);
-        g.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
-        osc.connect(g).connect(filter);
-        osc.start(now);
-        osc.stop(now + 2);
-      }
-      const wait = (mood.pluckMin + Math.random()*(mood.pluckMax-mood.pluckMin)) * 1000;
-      const t = setTimeout(()=> schedulePluck(mood), wait);
-      timers.push(t);
+    function pauseAllExcept(exceptKey){
+      Object.keys(players).forEach(k=>{
+        if(k !== exceptKey && ready[k]){
+          try{ players[k].pauseVideo(); }catch(err){}
+        }
+      });
     }
 
-    function startMood(key){
+    function playMood(key){
       currentKey = key;
-      const mood = Object.assign({key}, MUSIC_MOODS[key]);
-      buildMoodChain();
-      moodGain.gain.setValueAtTime(0, ctx.currentTime);
-      moodGain.gain.linearRampToValueAtTime(mood.gain, ctx.currentTime + 2.5);
-      schedulePad(mood);
-      setTimeout(()=> schedulePluck(mood), 1500);
+      playing = true;
+      if(!apiReady){ pendingKey = key; return; }
+      if(!players[key]) createPlayer(key);
+      else if(ready[key]) players[key].playVideo();
+      pauseAllExcept(key);
     }
 
     return {
-      start(key){
-        ensureCtx();
-        if(playing) return;
-        playing = true;
-        startMood(key);
-      },
+      start(key){ playMood(key); },
       stop(){
-        if(!playing) return;
         playing = false;
-        clearTimers();
-        if(moodGain && ctx){
-          const now = ctx.currentTime;
-          moodGain.gain.cancelScheduledValues(now);
-          moodGain.gain.setValueAtTime(moodGain.gain.value, now);
-          moodGain.gain.linearRampToValueAtTime(0.0001, now + 1.2);
+        pendingKey = null;
+        if(currentKey && players[currentKey] && ready[currentKey]){
+          try{ players[currentKey].pauseVideo(); }catch(err){}
         }
       },
       switchMood(key){
-        if(!playing){ return; }
-        clearTimers();
-        const oldGain = moodGain, oldFilter = filter;
-        if(oldGain && ctx){
-          const now = ctx.currentTime;
-          oldGain.gain.cancelScheduledValues(now);
-          oldGain.gain.setValueAtTime(oldGain.gain.value, now);
-          oldGain.gain.linearRampToValueAtTime(0.0001, now + 2);
-          setTimeout(()=>{ try{ oldGain.disconnect(); oldFilter.disconnect(); }catch(e){} }, 2200);
-        }
-        startMood(key);
+        if(!playing){ currentKey = key; return; }
+        playMood(key);
       },
       setVolume(v){
-        volume = v;
-        if(master && ctx) master.gain.linearRampToValueAtTime(v, ctx.currentTime + 0.15);
+        volumePct = Math.round(v*100);
+        Object.keys(players).forEach(k=>{
+          if(ready[k]){ try{ players[k].setVolume(volumePct); }catch(err){} }
+        });
       },
       isPlaying(){ return playing; }
     };
@@ -888,7 +852,7 @@
     const toggleLabel = document.getElementById('musicToggleLabel');
     if(toggleLabel) toggleLabel.textContent = on ? 'Pause music' : 'Play music';
     const moodLabel = document.getElementById('musicMoodLabel');
-    if(moodLabel) moodLabel.textContent = MUSIC_MOODS[settings.theme].label;
+    if(moodLabel) moodLabel.textContent = MUSIC_TRACKS[settings.theme].label;
     const volVal = document.getElementById('musicVolVal');
     if(volVal) volVal.textContent = Math.round(settings.music.volume*100) + '%';
     const slider = document.getElementById('musicVolumeSlider');
