@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Canopy</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -14,7 +14,7 @@
 <meta name="apple-mobile-web-app-title" content="Canopy">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
     --accent:#e3b877;
@@ -109,11 +109,11 @@
   .row{display:grid; grid-template-columns:78px 1fr; border-bottom:1px solid var(--row-divider);}
   .row:last-child{border-bottom:none;}
   .time-cell{
-    padding:16px 8px 16px 18px; font-family:'Cormorant Garamond',serif; font-size:17px; color:var(--text-dim);
+    padding:16px 8px 16px 18px; font-family:'Manrope',sans-serif; font-size:15px; font-weight:600; color:var(--text-dim);
     border-right:1px solid var(--row-divider); display:flex; align-items:flex-start; justify-content:flex-start;
-    letter-spacing:.3px;
+    letter-spacing:.2px;
   }
-  .row.has-tasks .time-cell{color:var(--text); font-weight:500;}
+  .row.has-tasks .time-cell{color:var(--text); font-weight:700;}
   .task-cell{padding:10px 14px 10px 16px; min-height:56px;}
   .task-list{display:flex; flex-direction:column;}
   .task-item{
@@ -192,7 +192,7 @@
     border:1px solid var(--panel-border); box-shadow:0 20px 60px rgba(0,0,0,0.5);
   }
   .timer-modal .task-name{font-size:13px; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:1px;}
-  .timer-display{font-family:'Cormorant Garamond',serif; font-size:56px; font-weight:500; margin:10px 0 6px; letter-spacing:1px; cursor:pointer;}
+  .timer-display{font-family:'Manrope',sans-serif; font-size:52px; font-weight:700; margin:10px 0 6px; letter-spacing:.5px; cursor:pointer; font-variant-numeric:tabular-nums;}
   .timer-edit{display:none; justify-content:center; align-items:center; gap:6px; margin:14px 0;}
   .timer-edit input{width:56px; text-align:center; font-size:22px; background:rgba(255,255,255,0.06); border:1px solid var(--panel-border); color:var(--text); border-radius:8px; padding:6px 0; font-family:inherit;}
   .timer-edit span{opacity:.6;}
